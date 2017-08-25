@@ -1,0 +1,8 @@
+[package]
+name = "iron_jsonnet"
+version = "0.1.0"
+authors = ["Amir Saeid <amir@glgdgt.com>"]
+
+[dependencies]
+iron = "0.5.*"
+libc = "0.2.*"
