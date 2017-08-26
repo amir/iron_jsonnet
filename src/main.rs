@@ -23,6 +23,7 @@ extern "C" {
     pub fn jsonnet_max_trace(vm: *mut JsonnetVm, v: c_uint);
     pub fn jsonnet_gc_min_objects(vm: *mut JsonnetVm, v: c_uint);
     pub fn jsonnet_gc_growth_trigger(vm: *mut JsonnetVm, v: f64);
+    pub fn jsonnet_jpath_add(vm: *mut JsonnetVm, v: *const c_char);
     pub fn jsonnet_evaluate_snippet(
         vm: *mut JsonnetVm,
         filename: *const c_char,
@@ -32,7 +33,7 @@ extern "C" {
 }
 
 fn main() {
-    fn version(request: &mut Request) -> IronResult<Response> {
+    fn evaluate_snippet(request: &mut Request) -> IronResult<Response> {
         let mut payload = String::new();
         request.body.read_to_string(&mut payload).unwrap();
         let vm = unsafe {
@@ -41,6 +42,7 @@ fn main() {
             jsonnet_gc_min_objects(vm, 1000);
             jsonnet_max_trace(vm, 20);
             jsonnet_gc_growth_trigger(vm, 2.0);
+            jsonnet_jpath_add(vm, (*CString::new("./jsonnet_lib").unwrap()).as_ptr());
             vm
         };
         let ev = unsafe {
@@ -56,5 +58,5 @@ fn main() {
         }
     }
 
-    let _server = Iron::new(version).http("0.0.0.0:3000").unwrap();
+    let _server = Iron::new(evaluate_snippet).http("0.0.0.0:3000").unwrap();
 }
