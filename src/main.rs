@@ -23,7 +23,12 @@ extern "C" {
     pub fn jsonnet_max_trace(vm: *mut JsonnetVm, v: c_uint);
     pub fn jsonnet_gc_min_objects(vm: *mut JsonnetVm, v: c_uint);
     pub fn jsonnet_gc_growth_trigger(vm: *mut JsonnetVm, v: f64);
-    pub fn jsonnet_evaluate_snippet(vm: *mut JsonnetVm, filename: *const c_char, snippet: *const c_char, error: *mut c_int) -> *mut c_char;
+    pub fn jsonnet_evaluate_snippet(
+        vm: *mut JsonnetVm,
+        filename: *const c_char,
+        snippet: *const c_char,
+        error: *mut c_int,
+    ) -> *mut c_char;
 }
 
 fn main() {
