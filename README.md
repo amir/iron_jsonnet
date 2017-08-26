@@ -18,7 +18,7 @@ local Kube = import "kube.libsonnet";
     }
 }
 
-$ curl -d "@/tmp/example.jsonnet" -X POST http://localhost:3000
+$ curl --data-binary "@/tmp/example.jsonnet" -X POST http://localhost:3000
 {
    "nginx-rc.yaml": {
       "apiVersion": "v1",
