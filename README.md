@@ -1,52 +1,33 @@
 ```
-$ cat /tmp/example.jsonnet
-local Kube = import "kube.libsonnet";
+$ make run
+```
 
+```
+$ cat /tmp/example
+local k = import "k8s.libsonnet";
+
+// Specify the import objects that we need
+local container = k.extensions.v1beta1.deployment.mixin.spec.template.spec.containersType;
+local containerPort = container.portsType;
+
+local targetPort = 80;
+local podLabels = {app: "nginx"};
+
+local nginxContainer =
+  container.new("nginx", "nginx:1.7.9") +
+  container.ports(containerPort.containerPort(targetPort));
+
+nginxContainer
+
+
+$ curl --data-binary "@/tmp/example" -X POST http://localhost:3000
 {
-
-    "nginx-rc.yaml": Kube.v1.ReplicationController("nginx") {
-    	spec: {
-		replicas: 1
-	},
-    },
-    "nginx-svc.yaml": Kube.v1.Service("nginx") {
-    	spec: {
-		selector: {
-			name: "nginx",
-		},
-	},
-    }
-}
-
-$ curl --data-binary "@/tmp/example.jsonnet" -X POST http://localhost:3000
-{
-   "nginx-rc.yaml": {
-      "apiVersion": "v1",
-      "kind": "ReplicationController",
-      "metadata": {
-         "labels": {
-            "name": "nginx"
-         },
-         "name": "nginx"
-      },
-      "spec": {
-         "replicas": 1
+   "image": "nginx:1.7.9",
+   "name": "nginx",
+   "ports": [
+      {
+         "containerPort": 80
       }
-   },
-   "nginx-svc.yaml": {
-      "apiVersion": "v1",
-      "kind": "Service",
-      "metadata": {
-         "labels": {
-            "name": "nginx"
-         },
-         "name": "nginx"
-      },
-      "spec": {
-         "selector": {
-            "name": "nginx"
-         }
-      }
-   }
+   ]
 }
 ```

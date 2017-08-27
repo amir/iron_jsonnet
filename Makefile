@@ -55,4 +55,5 @@ $(K8SOPENAPISPEC): $(GOCC)
 
 $(KSONNETLIB): $(KSONNETGEN) $(K8SOPENAPISPEC)
 	$(KSONNETGEN) $(K8SOPENAPISPEC) $(JSONNETLIBSPATH)
-	sed -i. "s/local::/localPath::/g" $(KSONNETLIB)
+	sed -i.back "s/local::/localPath::/g" $(KSONNETLIB)
+	rm $(KSONNETLIB).back
