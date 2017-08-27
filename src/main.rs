@@ -6,7 +6,7 @@ use iron::status;
 use iron::error::IronError;
 
 use std::io::Read;
-use libc::{c_char, c_int, c_uint};
+use libc::{c_char, c_int, c_uint, size_t};
 use std::ffi::{CStr, CString};
 
 #[repr(C)]
@@ -17,16 +17,15 @@ pub struct JsonnetVm {
 
 #[link(name = "jsonnet")]
 extern "C" {
-    pub fn jsonnet_make() -> *mut JsonnetVm;
-    pub fn jsonnet_version() -> *const c_char;
-    pub fn jsonnet_destroy(vm: *mut JsonnetVm);
-    pub fn jsonnet_max_stack(vm: *mut JsonnetVm, v: c_uint);
-    pub fn jsonnet_max_trace(vm: *mut JsonnetVm, v: c_uint);
-    pub fn jsonnet_gc_min_objects(vm: *mut JsonnetVm, v: c_uint);
-    pub fn jsonnet_gc_growth_trigger(vm: *mut JsonnetVm, v: f64);
-    pub fn jsonnet_jpath_add(vm: *mut JsonnetVm, v: *const c_char);
-    pub fn jsonnet_realloc(vm: *mut JsonnetVm, buf: *mut c_char, sz: c_int);
-    pub fn jsonnet_evaluate_snippet(
+    fn jsonnet_make() -> *mut JsonnetVm;
+    fn jsonnet_destroy(vm: *mut JsonnetVm);
+    fn jsonnet_max_stack(vm: *mut JsonnetVm, v: c_uint);
+    fn jsonnet_max_trace(vm: *mut JsonnetVm, v: c_uint);
+    fn jsonnet_gc_min_objects(vm: *mut JsonnetVm, v: c_uint);
+    fn jsonnet_gc_growth_trigger(vm: *mut JsonnetVm, v: f64);
+    fn jsonnet_jpath_add(vm: *mut JsonnetVm, v: *const c_char);
+    fn jsonnet_realloc(vm: *mut JsonnetVm, buf: *mut c_char, sz: size_t);
+    fn jsonnet_evaluate_snippet(
         vm: *mut JsonnetVm,
         filename: *const c_char,
         snippet: *const c_char,
