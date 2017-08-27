@@ -43,7 +43,7 @@ fn main() {
             jsonnet_gc_min_objects(vm, 1000);
             jsonnet_max_trace(vm, 20);
             jsonnet_gc_growth_trigger(vm, 2.0);
-            jsonnet_jpath_add(vm, (*CString::new("./jsonnet_lib").unwrap()).as_ptr());
+            jsonnet_jpath_add(vm, (*CString::new("./jpath").unwrap()).as_ptr());
             vm
         };
         let ev = unsafe {
