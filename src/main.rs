@@ -3,13 +3,14 @@ extern crate iron;
 extern crate router;
 
 use iron::prelude::*;
-use iron::status;
+use iron::{Chain, status};
 use router::Router;
 use iron::error::IronError;
 
 use std::io::Read;
-use libc::{c_char, c_int, c_uint, size_t};
+use std::string::String;
 use std::ffi::{CStr, CString};
+use libc::{c_char, c_int, c_uint, size_t};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -20,6 +21,7 @@ pub struct JsonnetVm {
 #[link(name = "jsonnet")]
 extern "C" {
     fn jsonnet_make() -> *mut JsonnetVm;
+    fn jsonnet_version() -> *const c_char;
     fn jsonnet_destroy(vm: *mut JsonnetVm);
     fn jsonnet_max_stack(vm: *mut JsonnetVm, v: c_uint);
     fn jsonnet_max_trace(vm: *mut JsonnetVm, v: c_uint);
@@ -33,6 +35,16 @@ extern "C" {
         snippet: *const c_char,
         error: *mut c_int,
     ) -> *mut c_char;
+}
+
+fn version_header(_: &mut Request, mut resp: Response) -> IronResult<Response> {
+    let jv = {
+        let v = unsafe { CStr::from_ptr(jsonnet_version()) };
+        String::from(format!("Jsonnet/{}", v.to_str().ok().unwrap()))
+    };
+    resp.headers.set_raw("Server", vec![jv.into_bytes()]);
+
+    Ok(resp)
 }
 
 fn main() {
@@ -67,5 +79,9 @@ fn main() {
 
     let mut router = Router::new();
     router.post("/evaluate", evaluate_snippet, "evaluate");
-    Iron::new(router).http("0.0.0.0:3000").unwrap();
+
+    let mut chain = Chain::new(router);
+    chain.link_after(version_header);
+
+    Iron::new(chain).http(format!("0.0.0.0:{}", 3000)).unwrap();
 }
