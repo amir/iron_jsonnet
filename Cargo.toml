@@ -7,3 +7,4 @@ build = "build.rs"
 [dependencies]
 iron = "0.5.*"
 libc = "0.2.*"
+router = "*"

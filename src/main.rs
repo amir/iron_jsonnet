@@ -1,8 +1,10 @@
 extern crate libc;
 extern crate iron;
+extern crate router;
 
 use iron::prelude::*;
 use iron::status;
+use router::Router;
 use iron::error::IronError;
 
 use std::io::Read;
@@ -63,5 +65,7 @@ fn main() {
         }
     }
 
-    let _server = Iron::new(evaluate_snippet).http("0.0.0.0:3000").unwrap();
+    let mut router = Router::new();
+    router.post("/evaluate", evaluate_snippet, "evaluate");
+    Iron::new(router).http("0.0.0.0:3000").unwrap();
 }
