@@ -1,15 +1,18 @@
 extern crate libc;
 extern crate iron;
 extern crate router;
+extern crate yaml_rust;
 
 use iron::prelude::*;
 use iron::{Chain, status};
 use router::Router;
 use iron::error::IronError;
+use yaml_rust::{YamlLoader, yaml};
 
 use std::io::Read;
 use std::string::String;
 use std::ffi::{CStr, CString};
+use std::collections::HashSet;
 use libc::{c_char, c_int, c_uint, size_t};
 
 #[repr(C)]
@@ -77,8 +80,54 @@ fn main() {
         }
     }
 
+    fn imports(doc: &yaml::Yaml) -> Vec<String> {
+        fn go(d: &yaml::Yaml, vec: &mut Vec<String>) {
+            match *d {
+                yaml::Yaml::Array(ref a) => {
+                    for x in a {
+                        go(x, vec)
+                    }
+                }
+                yaml::Yaml::Hash(ref h) => {
+                    for (_, v) in h {
+                        go(v, vec)
+                    }
+                }
+                yaml::Yaml::String(ref s) => vec.push((*s).clone()),
+                ref otherwise => print!("Otherwise: {:?}", otherwise),
+            }
+        }
+
+        let mut v: Vec<String> = Vec::new();
+        go(doc, &mut v);
+
+        v
+    }
+
+    fn parse_yaml(request: &mut Request) -> IronResult<Response> {
+        let mut payload = String::new();
+        request.body.read_to_string(&mut payload).unwrap();
+
+        let docs = YamlLoader::load_from_str(&payload).unwrap();
+
+        let mut imprts = HashSet::new();
+
+        for d in &docs {
+            let is = imports(d);
+            for i in is.iter() {
+                let v: Vec<String> = i.split('.').map(str::to_owned).collect();
+                if v.len() > 1 {
+                    imprts.insert(v[0].clone());
+                }
+            }
+        }
+
+        Ok(Response::with((status::Ok, format!("{:?}", imprts))))
+    }
+
     let mut router = Router::new();
     router.post("/evaluate", evaluate_snippet, "evaluate");
+    router.post("/parse_yaml", parse_yaml, "parse_yaml");
 
     let mut chain = Chain::new(router);
     chain.link_after(version_header);
