@@ -80,7 +80,7 @@ fn main() {
         }
     }
 
-    fn imports(doc: &yaml::Yaml) -> Vec<String> {
+    fn references(doc: &yaml::Yaml) -> Vec<String> {
         fn go(d: &yaml::Yaml, vec: &mut Vec<String>) {
             match *d {
                 yaml::Yaml::Array(ref a) => {
@@ -104,25 +104,30 @@ fn main() {
         v
     }
 
+    fn root(x: &str) -> Option<String> {
+        let vs: Vec<String> = x.split('.').map(str::to_owned).collect();
+        if vs.len() > 1 {
+            vs.get(0).map(|x| x.clone())
+        } else {
+            None
+        }
+    }
+
     fn parse_yaml(request: &mut Request) -> IronResult<Response> {
+        use std::iter::FromIterator;
+
         let mut payload = String::new();
         request.body.read_to_string(&mut payload).unwrap();
 
         let docs = YamlLoader::load_from_str(&payload).unwrap();
 
-        let mut imprts = HashSet::new();
+        let libs: Vec<String> = docs.iter()
+            .flat_map(references)
+            .flat_map(|x| root(&x))
+            .collect();
+        let libs_set: HashSet<String> = HashSet::from_iter(libs);
 
-        for d in &docs {
-            let is = imports(d);
-            for i in is.iter() {
-                let v: Vec<String> = i.split('.').map(str::to_owned).collect();
-                if v.len() > 1 {
-                    imprts.insert(v[0].clone());
-                }
-            }
-        }
-
-        Ok(Response::with((status::Ok, format!("{:?}", imprts))))
+        Ok(Response::with((status::Ok, format!("{:?}", libs_set))))
     }
 
     let mut router = Router::new();
