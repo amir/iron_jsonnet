@@ -1,9 +1,9 @@
 {
+	webserver(n):: {
+			name: n,
+			image: "gcr.io/google_containers/nginx",
+	},
 	version(v):: {
-		spec: {
-			metadata: {
-				version: v,
-			},
-		},
+		version: v,
 	},
 }
