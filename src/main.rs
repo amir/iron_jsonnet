@@ -50,89 +50,100 @@ fn version_header(_: &mut Request, mut resp: Response) -> IronResult<Response> {
     Ok(resp)
 }
 
-fn main() {
-    fn evaluate_snippet(request: &mut Request) -> IronResult<Response> {
-        let mut payload = String::new();
-        request.body.read_to_string(&mut payload).unwrap();
-        let vm = unsafe {
-            let vm = jsonnet_make();
-            jsonnet_max_stack(vm, 500);
-            jsonnet_gc_min_objects(vm, 1000);
-            jsonnet_max_trace(vm, 20);
-            jsonnet_gc_growth_trigger(vm, 2.0);
-            jsonnet_jpath_add(vm, (*CString::new("./jpath").unwrap()).as_ptr());
-            vm
-        };
-        let ev = unsafe {
-            let filename = CString::new("").unwrap();
-            let body = CString::new(payload).unwrap();
-            let mut err: c_int = 0;
-            let out =
-                jsonnet_evaluate_snippet(vm, (*filename).as_ptr(), (*body).as_ptr(), &mut err);
-            let res = CStr::from_ptr(out);
-            jsonnet_realloc(vm, out, 0);
-            jsonnet_destroy(vm);
-            res
-        };
-        match ev.to_str() {
-            Ok(v) => Ok(Response::with((status::Ok, v))),
-            Err(err) => Err(IronError::new(err, status::InternalServerError)),
-        }
-    }
+fn evaluate_snippet(str: String) -> IronResult<Response> {
+    let vm = unsafe {
+        let vm = jsonnet_make();
+        jsonnet_max_stack(vm, 500);
+        jsonnet_gc_min_objects(vm, 1000);
+        jsonnet_max_trace(vm, 20);
+        jsonnet_gc_growth_trigger(vm, 2.0);
+        jsonnet_jpath_add(vm, (*CString::new("./jpath").unwrap()).as_ptr());
+        vm
+    };
 
-    fn references(doc: &yaml::Yaml) -> Vec<String> {
-        fn go(d: &yaml::Yaml, vec: &mut Vec<String>) {
-            match *d {
-                yaml::Yaml::Array(ref a) => {
-                    for x in a {
-                        go(x, vec)
-                    }
+    let mut err: c_int = 0;
+    let ev = unsafe {
+        let filename = CString::new("").unwrap();
+        let body = CString::new(str).unwrap();
+        let out = jsonnet_evaluate_snippet(vm, (*filename).as_ptr(), (*body).as_ptr(), &mut err);
+        let res = CStr::from_ptr(out);
+        jsonnet_realloc(vm, out, 0);
+        jsonnet_destroy(vm);
+        res
+    };
+
+    match ev.to_str() {
+        Ok(v) if err == 0 => Ok(Response::with((status::Ok, v))),
+        Ok(v) => Ok(Response::with((status::BadRequest, v))),
+        Err(err) => Err(IronError::new(err, status::InternalServerError)),
+    }
+}
+
+fn references(doc: &yaml::Yaml) -> Vec<String> {
+    fn go(d: &yaml::Yaml, vec: &mut Vec<String>) {
+        match *d {
+            yaml::Yaml::Array(ref a) => {
+                for x in a {
+                    go(x, vec)
                 }
-                yaml::Yaml::Hash(ref h) => {
-                    for (_, v) in h {
-                        go(v, vec)
-                    }
-                }
-                yaml::Yaml::String(ref s) => vec.push((*s).clone()),
-                ref otherwise => print!("Otherwise: {:?}", otherwise),
             }
-        }
-
-        let mut v: Vec<String> = Vec::new();
-        go(doc, &mut v);
-
-        v
-    }
-
-    fn root(x: &str) -> Option<String> {
-        let vs: Vec<String> = x.split('.').map(str::to_owned).collect();
-        if vs.len() > 1 {
-            vs.get(0).map(|x| x.clone())
-        } else {
-            None
+            yaml::Yaml::Hash(ref h) => {
+                for (_, v) in h {
+                    go(v, vec)
+                }
+            }
+            yaml::Yaml::String(ref s) => vec.push((*s).clone()),
+            ref otherwise => print!("Otherwise: {:?}", otherwise),
         }
     }
 
-    fn parse_yaml(request: &mut Request) -> IronResult<Response> {
-        use std::iter::FromIterator;
+    let mut v: Vec<String> = Vec::new();
+    go(doc, &mut v);
 
+    v
+}
+
+fn root(x: &str) -> Option<String> {
+    let vs: Vec<String> = x.split('.').map(str::to_owned).collect();
+    if vs.len() > 1 {
+        vs.get(0).map(|x| x.clone())
+    } else {
+        None
+    }
+}
+
+fn parse_yaml(str: String) -> IronResult<Response> {
+    use std::iter::FromIterator;
+
+    let docs = YamlLoader::load_from_str(&str).unwrap();
+
+    let libs: Vec<String> = docs.iter()
+        .flat_map(references)
+        .flat_map(|x| root(&x))
+        .collect();
+    let libs_set: HashSet<String> = HashSet::from_iter(libs);
+
+    Ok(Response::with((status::Ok, format!("{:?}", libs_set))))
+}
+
+fn main() {
+    fn evaluate_snippet_handler(request: &mut Request) -> IronResult<Response> {
         let mut payload = String::new();
         request.body.read_to_string(&mut payload).unwrap();
 
-        let docs = YamlLoader::load_from_str(&payload).unwrap();
+        evaluate_snippet(payload)
+    }
 
-        let libs: Vec<String> = docs.iter()
-            .flat_map(references)
-            .flat_map(|x| root(&x))
-            .collect();
-        let libs_set: HashSet<String> = HashSet::from_iter(libs);
+    fn parse_yaml_handler(request: &mut Request) -> IronResult<Response> {
+        let mut payload = String::new();
+        request.body.read_to_string(&mut payload).unwrap();
 
-        Ok(Response::with((status::Ok, format!("{:?}", libs_set))))
+        parse_yaml(payload)
     }
 
     let mut router = Router::new();
-    router.post("/evaluate", evaluate_snippet, "evaluate");
-    router.post("/parse_yaml", parse_yaml, "parse_yaml");
+    router.post("/parse_yaml", parse_yaml_handler, "parse_yaml");
+    router.post("/evaluate", evaluate_snippet_handler, "evaluate");
 
     let mut chain = Chain::new(router);
     chain.link_after(version_header);
