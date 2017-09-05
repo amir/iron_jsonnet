@@ -20,31 +20,22 @@ $ make run
 And after a few minutes you should have a running web service listening on port 3000.
 
 ```
-$ cat /tmp/example
-local k = import "k8s.libsonnet";
+$ cat /tmp/example.yaml
+metadata:
+  labels:
+  - acme.version('1.1')
+spec:
+  containers:
+   - acme.webserver('lb')
 
-// Specify the import objects that we need
-local container = k.extensions.v1beta1.deployment.mixin.spec.template.spec.containersType;
-local containerPort = container.portsType;
-
-local targetPort = 80;
-local podLabels = {app: "nginx"};
-
-local nginxContainer =
-  container.new("nginx", "nginx:1.7.9") +
-  container.ports(containerPort.containerPort(targetPort));
-
-nginxContainer
-
-
-$ curl --data-binary "@/tmp/example" -X POST http://localhost:3000
-{
-   "image": "nginx:1.7.9",
-   "name": "nginx",
-   "ports": [
-      {
-         "containerPort": 80
-      }
-   ]
-}
+$ curl --data-binary "@/tmp/example" -X POST http://localhost:3000/evaluate
+metadata:
+  labels:
+    -
+      version: "1.1"
+spec:
+  containers:
+    -
+      image: gcr.io/google_containers/nginx
+      name: lb
 ```
