@@ -1,15 +1,18 @@
 extern crate libc;
 extern crate iron;
+extern crate serde;
 extern crate router;
 extern crate yaml_rust;
+extern crate serde_json;
+extern crate serde_yaml;
 
+use router::Router;
 use iron::prelude::*;
 use iron::{Chain, status};
-use router::Router;
 use iron::error::IronError;
 use yaml_rust::{YamlLoader, yaml};
 
-use std::io::Read;
+use std::io::{Read, Write};
 use std::string::String;
 use std::ffi::{CStr, CString};
 use std::collections::HashSet;
@@ -38,6 +41,62 @@ extern "C" {
         snippet: *const c_char,
         error: *mut c_int,
     ) -> *mut c_char;
+}
+
+#[derive(Clone, Debug)]
+struct JsonnetFormatter;
+
+impl serde_json::ser::Formatter for JsonnetFormatter {
+    #[inline]
+    fn begin_string<W: ?Sized>(&mut self, writer: &mut W) -> std::io::Result<()>
+    where
+        W: Write,
+    {
+        writer.write_all(b"")
+    }
+
+    #[inline]
+    fn end_string<W: ?Sized>(&mut self, writer: &mut W) -> std::io::Result<()>
+    where
+        W: Write,
+    {
+        writer.write_all(b"")
+    }
+}
+
+fn fg<W>(writer: W) -> serde_json::ser::Serializer<W, JsonnetFormatter>
+where
+    W: Write,
+{
+    serde_json::ser::Serializer::with_formatter(writer, JsonnetFormatter)
+}
+
+fn to_writer_jsonnet<W, T: ?Sized>(writer: W, value: &T) -> serde_json::error::Result<()>
+where
+    W: Write,
+    T: serde::ser::Serialize,
+{
+    let mut ser = fg(writer);
+    try!(value.serialize(&mut ser));
+    Ok(())
+}
+
+fn to_vec_jsonnet<T: ?Sized>(value: &T) -> serde_json::error::Result<Vec<u8>>
+where
+    T: serde::ser::Serialize,
+{
+    let mut writer = Vec::with_capacity(128);
+    try!(to_writer_jsonnet(&mut writer, value));
+    Ok(writer)
+}
+
+fn to_string_jsonnet<T: ?Sized>(value: &T) -> serde_json::error::Result<String>
+where
+    T: serde::ser::Serialize,
+{
+    let vec = try!(to_vec_jsonnet(value));
+    let string = unsafe { String::from_utf8_unchecked(vec) };
+    Ok(string)
 }
 
 fn version_header(_: &mut Request, mut resp: Response) -> IronResult<Response> {
@@ -112,7 +171,7 @@ fn root(x: &str) -> Option<String> {
     }
 }
 
-fn parse_yaml(str: String) -> IronResult<Response> {
+fn get_references(str: String) -> HashSet<String> {
     use std::iter::FromIterator;
 
     let docs = YamlLoader::load_from_str(&str).unwrap();
@@ -121,9 +180,22 @@ fn parse_yaml(str: String) -> IronResult<Response> {
         .flat_map(references)
         .flat_map(|x| root(&x))
         .collect();
-    let libs_set: HashSet<String> = HashSet::from_iter(libs);
 
-    Ok(Response::with((status::Ok, format!("{:?}", libs_set))))
+    HashSet::from_iter(libs)
+}
+
+fn yaml_to_jsonnet(str: String, libs: HashSet<String>) -> String {
+    let value: serde_json::Value = serde_yaml::from_str(&str).unwrap();
+    let value_str = to_string_jsonnet(&value).unwrap();
+
+    let imports = libs.iter()
+        .map(|x| {
+            let x1 = str::to_owned(x);
+            format!("local {} = import \"{}.libsonnet\";\n", x1, x1)
+        })
+        .collect::<Vec<String>>();
+
+    format!("{}\n{}", imports.join("\n"), value_str)
 }
 
 fn main() {
@@ -131,18 +203,13 @@ fn main() {
         let mut payload = String::new();
         request.body.read_to_string(&mut payload).unwrap();
 
-        evaluate_snippet(payload)
-    }
+        let refs = get_references(payload.clone());
+        let jsonnet = yaml_to_jsonnet(payload, refs);
 
-    fn parse_yaml_handler(request: &mut Request) -> IronResult<Response> {
-        let mut payload = String::new();
-        request.body.read_to_string(&mut payload).unwrap();
-
-        parse_yaml(payload)
+        evaluate_snippet(jsonnet)
     }
 
     let mut router = Router::new();
-    router.post("/parse_yaml", parse_yaml_handler, "parse_yaml");
     router.post("/evaluate", evaluate_snippet_handler, "evaluate");
 
     let mut chain = Chain::new(router);
