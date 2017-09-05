@@ -132,7 +132,12 @@ fn evaluate_snippet(str: String) -> IronResult<Response> {
     };
 
     match ev.to_str() {
-        Ok(v) if err == 0 => Ok(Response::with((status::Ok, v))),
+        Ok(v) if err == 0 => {
+            let a: serde_json::Value = serde_json::from_str(v).unwrap();
+            Ok(Response::with(
+                (status::Ok, serde_yaml::to_string(&a).unwrap()),
+            ))
+        }
         Ok(v) => Ok(Response::with((status::BadRequest, v))),
         Err(err) => Err(IronError::new(err, status::InternalServerError)),
     }
