@@ -1,5 +1,5 @@
 # Ironned Jsonnet
-Creates a Jsonnet VM per HTTP request and evaluates its body payload.
+Creates a Jsonnet VM per HTTP request, converts the Yaml payload to Jsonnet, imports the referenced libraries, evaluates the document, and converts it back to yaml for response.
 
 ## Requirements
 * [Jsonnet](http://jsonnet.org/)
